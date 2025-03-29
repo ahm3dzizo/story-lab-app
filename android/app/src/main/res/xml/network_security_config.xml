@@ -18,8 +18,6 @@
             <certificates src="system" />
             <certificates src="user" />
         </trust-anchors>
-        <pin-set expiration="2026-01-01">
-            <!-- أترك هذا فارغاً للسماح بجميع الشهادات -->
-        </pin-set>
+        <!-- Permitimos todos los certificados del sistema y del usuario sin restricciones adicionales -->
     </domain-config>
 </network-security-config> 
