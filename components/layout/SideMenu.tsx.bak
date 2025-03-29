@@ -1,0 +1,725 @@
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, Animated, Pressable, Dimensions, Platform } from 'react-native';
+import { Avatar, Drawer, Text, useTheme, Portal, IconButton } from 'react-native-paper';
+import { useRouter, usePathname, LinkProps } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { routes } from '@/app/routes';
+import { BlurView } from 'expo-blur';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { responsiveSpacing, responsiveFontSize } from '@/app/utils/responsive';
+import { useAuth } from '@/lib/auth/AuthContext';
+import { supabase } from '@/lib/supabase';
+
+// Same type definition as in SettingsScreen
+type UserData = {
+  id: number;
+  auth_id?: string;
+  email: string;
+  username: string;
+  avatar_url?: string;
+  department?: string;
+  location?: string;
+  phone?: string;
+  role?: string;
+  created_at: string;
+  updated_at: string;
+  partners?: Array<{
+    id: number;
+    full_name: string;
+    email: string;
+    phone_number?: string;
+    profile_picture_url?: string;
+    specialization?: string;
+    user_id?: string;
+  }>;
+  employees?: Array<{
+    id: number;
+    full_name: string;
+    email: string;
+    phone_number?: string;
+    department: string;
+    position: string;
+    user_id?: string;
+  }>;
+};
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const MENU_WIDTH = Math.min(SCREEN_WIDTH * 0.85, 360);
+
+type AppRoute = LinkProps['href'];
+
+interface MenuItem {
+  key: string;
+  title: string;
+  icon: string;
+  roles?: string[];
+  route: AppRoute;
+}
+
+interface SideMenuProps {
+  visible?: boolean;
+  onClose?: () => void;
+}
+
+const menuItems: MenuItem[] = [
+  { key: 'dashboard', title: 'Dashboard', icon: 'view-dashboard', route: routes.app.dashboard },
+  { key: 'clients', title: 'Clients', icon: 'account-group', route: routes.app.clients.root },
+  { key: 'partners', title: 'Partners', icon: 'handshake', route: routes.app.partners.root },
+  { key: 'employees', title: 'Employees', icon: 'account-tie', route: routes.app.employees.root },
+  { key: 'expenses', title: 'Expenses', icon: 'cash-multiple', route: routes.app.expenses.root },
+  { key: 'tasks', title: 'Tasks', icon: 'clipboard-check-outline', route: routes.app.tasks.root },
+  { key: 'logomotion', title: 'Animated Logo', icon: 'animation', route: routes.app.logomotion },
+  { key: 'chat', title: 'Chat', icon: 'chat', route: '/(app)/chat' as AppRoute },
+  { key: 'gemini', title: 'Gemini AI', icon: 'robot', route: '/(app)/chat/gemini' as AppRoute },
+];
+
+export const SideMenu = ({
+  visible = false,
+  onClose,
+}: SideMenuProps) => {
+  const theme = useTheme();
+  const router = useRouter();
+  const pathname = usePathname();
+  const { session } = useAuth();
+  const [isReady, setIsReady] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const translateX = useRef(new Animated.Value(-MENU_WIDTH)).current;
+  const opacity = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    setIsReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (session) {
+      fetchUserData();
+    }
+  }, [session]);
+
+  // Animation effect for showing/hiding the side menu
+  useEffect(() => {
+    if (!isReady) return;
+    
+    if (visible) {
+      translateX.setValue(-MENU_WIDTH);
+      opacity.setValue(0);
+      
+      Animated.parallel([
+        Animated.timing(translateX, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(translateX, {
+          toValue: -MENU_WIDTH,
+          duration: 200,
+          useNativeDriver: true,
+        }),
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 150,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [visible, isReady, translateX, opacity]);
+
+  // Fetch user data from the database
+  const fetchUserData = async () => {
+    try {
+      setLoading(true);
+      const userEmail = session?.user?.email;
+      const userId = session?.user?.id; // This is the UUID from Supabase Auth
+      
+      console.log('SideMenu - Session details:', { email: userEmail, id: userId });
+      
+      if (!userEmail && !userId) {
+        console.error('SideMenu - No user email or ID found in session');
+        setLoading(false);
+        return;
+      }
+
+      // Direct email lookup for debugging
+      if (userEmail) {
+        console.log('SideMenu - Performing direct email lookups...');
+        
+        // Check users table
+        const { data: usersByEmail, error: userEmailError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', userEmail);
+          
+        console.log('SideMenu - Direct users lookup result:', 
+          userEmailError ? `Error: ${userEmailError.message}` : 
+          usersByEmail?.length ? `Found ${usersByEmail.length} users` : 'No users found');
+        
+        if (usersByEmail?.length) {
+          console.log('SideMenu - Using directly found user record');
+          const userData = usersByEmail[0];
+          const enhancedData = await enhanceUserData(userData);
+          setUserData(enhancedData);
+          setLoading(false);
+          return;
+        }
+        
+        // Check partners table
+        const { data: partnersByEmail, error: partnerEmailError } = await supabase
+          .from('partners')
+          .select('*')
+          .eq('email', userEmail);
+          
+        console.log('SideMenu - Direct partners lookup result:', 
+          partnerEmailError ? `Error: ${partnerEmailError.message}` : 
+          partnersByEmail?.length ? `Found ${partnersByEmail.length} partners` : 'No partners found');
+        
+        if (partnersByEmail?.length) {
+          console.log('SideMenu - Using directly found partner record');
+          const partnerData = partnersByEmail[0];
+          const syntheticUser = {
+            id: partnerData.id,
+            email: partnerData.email,
+            username: partnerData.email?.split('@')[0] || 'User',
+            auth_id: userId,
+            role: 'Partner',
+            partners: [partnerData],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          setUserData(syntheticUser as UserData);
+          setLoading(false);
+          return;
+        }
+        
+        // Check employees table
+        const { data: employeesByEmail, error: employeeEmailError } = await supabase
+          .from('employees')
+          .select('*')
+          .eq('email', userEmail);
+          
+        console.log('SideMenu - Direct employees lookup result:', 
+          employeeEmailError ? `Error: ${employeeEmailError.message}` : 
+          employeesByEmail?.length ? `Found ${employeesByEmail.length} employees` : 'No employees found');
+        
+        if (employeesByEmail?.length) {
+          console.log('SideMenu - Found employee record directly');
+          const employeeData = employeesByEmail[0];
+          const syntheticUser = {
+            id: employeeData.id,
+            email: employeeData.email,
+            username: employeeData.full_name?.split(' ')[0] || employeeData.email?.split('@')[0] || 'User',
+            auth_id: userId,
+            role: employeeData.position || 'Employee',
+            department: employeeData.department,
+            employees: [employeeData],
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          setUserData(syntheticUser as UserData);
+          setLoading(false);
+          return;
+        }
+      }
+      
+      // Try all tables in parallel with auth_id
+      const [usersResults, partnersResults, employeesResults] = await Promise.all([
+        // Users table queries
+        supabase
+          .from('users')
+          .select('*')
+          .or(`email.eq.${userEmail},auth_id.eq.${userId}`)
+          .limit(1),
+          
+        // Partners table queries
+        supabase
+          .from('partners')
+          .select('*')
+          .or(`email.eq.${userEmail},user_id.eq.${userId}`)
+          .limit(1),
+          
+        // Employees table queries
+        supabase
+          .from('employees')
+          .select('*')
+          .or(`email.eq.${userEmail},user_id.eq.${userId}`)
+          .limit(1)
+      ]);
+      
+      // If we found a user record, enhance it and use it
+      if (usersResults.data && usersResults.data.length > 0) {
+        const userRecord = usersResults.data[0];
+        const enhancedData = await enhanceUserData(userRecord);
+        setUserData(enhancedData);
+        setLoading(false);
+        return;
+      }
+      
+      // Try finding in partners table
+      if (partnersResults.data && partnersResults.data.length > 0) {
+        const partnerRecord = partnersResults.data[0];
+        const partnerName = partnerRecord.full_name || partnerRecord.name || '';
+        const syntheticUser = {
+          id: partnerRecord.id,
+          email: partnerRecord.email,
+          username: partnerName.split(' ')[0] || partnerRecord.email?.split('@')[0] || 'User',
+          auth_id: userId,
+          role: 'Partner',
+          created_at: partnerRecord.created_at || new Date().toISOString(),
+          updated_at: partnerRecord.updated_at || new Date().toISOString(),
+          partners: [partnerRecord]
+        };
+        
+        // Update the partner record with auth_id if we have it
+        if (userId && partnerRecord.user_id !== userId) {
+          const { error: updateError } = await supabase
+            .from('partners')
+            .update({ user_id: userId })
+            .eq('id', partnerRecord.id);
+            
+          if (updateError) {
+            console.error('SideMenu - Error updating partner user_id:', updateError);
+          }
+        }
+        
+        setUserData(syntheticUser as UserData);
+        setLoading(false);
+        return;
+      }
+      
+      // Try finding in employees table
+      if (employeesResults.data && employeesResults.data.length > 0) {
+        const employeeRecord = employeesResults.data[0];
+        const employeeName = employeeRecord.full_name || employeeRecord.name || '';
+        const syntheticUser = {
+          id: employeeRecord.id,
+          email: employeeRecord.email,
+          username: employeeName.split(' ')[0] || employeeRecord.email?.split('@')[0] || 'User',
+          auth_id: userId,
+          role: employeeRecord.position || 'Employee',
+          department: employeeRecord.department,
+          created_at: employeeRecord.created_at || new Date().toISOString(),
+          updated_at: employeeRecord.updated_at || new Date().toISOString(),
+          employees: [employeeRecord]
+        };
+        
+        // Update the employee record with auth_id if we have it
+        if (userId && employeeRecord.user_id !== userId) {
+          const { error: updateError } = await supabase
+            .from('employees')
+            .update({ user_id: userId })
+            .eq('id', employeeRecord.id);
+            
+          if (updateError) {
+            console.error('SideMenu - Error updating employee user_id:', updateError);
+          }
+        }
+        
+        setUserData(syntheticUser as UserData);
+        setLoading(false);
+        return;
+      }
+      
+      // Last resort - create a new user
+      if (userId && userEmail) {
+        try {
+          const { data: newUser, error: insertError } = await supabase
+            .from('users')
+            .insert({
+              email: userEmail,
+              username: userEmail.split('@')[0],
+              auth_id: userId,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            })
+            .select()
+            .single();
+            
+          if (insertError) {
+            console.error('SideMenu - Error creating user:', insertError);
+          } else if (newUser) {
+            console.log('SideMenu - Created new user:', newUser);
+            setUserData(newUser);
+          }
+        } catch (insertError) {
+          console.error('SideMenu - Exception during user creation:', insertError);
+        }
+      }
+
+      setLoading(false);
+      
+    } catch (error) {
+      console.error('SideMenu - Error in fetchUserData:', error);
+      setLoading(false);
+    }
+  };
+
+  // Helper function to fetch related data using auth_id
+  const enhanceUserData = async (userData: any) => {
+    try {
+      console.log('SideMenu - Enhancing user data:', userData);
+      // Clone the user data to avoid mutation problems
+      const enhancedData = { ...userData };
+      
+      // Fetch partner data if needed
+      if (!enhancedData.partners && userData.auth_id) {
+        const { data: partners, error: partnersError } = await supabase
+          .from('partners')
+          .select('*')
+          .eq('user_id', userData.auth_id);
+          
+        if (!partnersError && partners && partners.length > 0) {
+          enhancedData.partners = partners;
+        }
+      }
+      
+      // Fetch employee data if needed
+      if (!enhancedData.employees && userData.auth_id) {
+        const { data: employees, error: employeesError } = await supabase
+          .from('employees')
+          .select('*')
+          .eq('user_id', userData.auth_id);
+          
+        if (!employeesError && employees && employees.length > 0) {
+          enhancedData.employees = employees;
+        }
+      }
+      
+      // Set defaults for missing fields
+      enhancedData.role = enhancedData.role || 
+                          (enhancedData.employees?.[0]?.position) ||
+                          (enhancedData.partners?.length ? 'Partner' : 'User');
+      
+      enhancedData.department = enhancedData.department || 
+                               (enhancedData.partners?.[0]?.department) ||
+                               (enhancedData.employees?.[0]?.department) || 
+                               'General';
+      
+      return enhancedData;
+    } catch (error) {
+      console.error('SideMenu - Error in enhanceUserData:', error);
+      return userData;
+    }
+  };
+
+  const handleNavigation = (route: AppRoute) => {
+    onClose?.();
+    setTimeout(() => {
+      router.replace(route);
+    }, 100);
+  };
+
+  const handlePressIn = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 0.95,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.timing(scaleAnim, {
+      toValue: 1,
+      duration: 100,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handleLogout = () => {
+    onClose?.();
+    setTimeout(() => {
+      router.replace(routes.auth.logout);
+    }, 100);
+  };
+
+  // Filter menu items based on user role
+  const userRole = userData?.role?.toLowerCase() || 'user';
+  const filteredMenuItems = menuItems.filter(
+    item => !item.roles || item.roles.includes(userRole)
+  );
+
+  const isRouteActive = (route: AppRoute) => {
+    try {
+      const routeStr = route.toString();
+      return pathname.startsWith(routeStr);
+    } catch (e) {
+      return false;
+    }
+  };
+
+  // Get avatar source, either from user data or default
+  const getAvatarSource = () => {
+    try {
+      if (userData?.avatar_url) {
+        return { uri: userData.avatar_url };
+      }
+      
+      if (userData?.partners?.[0]?.profile_picture_url) {
+        return { uri: userData.partners[0].profile_picture_url };
+      }
+      
+      return require('@/assets/images/defaultavatar.png');
+    } catch (e) {
+      return require('@/assets/images/defaultavatar.png');
+    }
+  };
+
+  // Get user display name
+  const getUserName = () => {
+    if (loading) return 'Loading...';
+    
+    if (userData?.username) {
+      return userData.username;
+    }
+    
+    if (userData?.partners?.[0]?.full_name) {
+      return userData.partners[0].full_name.split(' ')[0];
+    }
+    
+    if (userData?.employees?.[0]?.full_name) {
+      return userData.employees[0].full_name.split(' ')[0];
+    }
+    
+    return userData?.email?.split('@')[0] || 'User';
+  };
+
+  // Get user role for display
+  const getDisplayRole = () => {
+    if (loading) return '...';
+    
+    if (userData?.role) {
+      return userData.role.charAt(0).toUpperCase() + userData.role.slice(1);
+    }
+    
+    if (userData?.employees?.[0]?.position) {
+      return userData.employees[0].position;
+    }
+    
+    if (userData?.partners?.length) {
+      return 'Partner';
+    }
+    
+    return 'User';
+  };
+
+  if (!isReady) return null;
+
+  const menuContent = (
+    <BlurView intensity={100} style={styles.drawer}>
+      <SafeAreaView edges={['top', 'bottom']} style={styles.safeArea}>
+        <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
+          <View style={styles.headerContent}>
+            <Avatar.Image
+              size={64}
+              source={getAvatarSource()}
+              style={[styles.avatar, loading && { opacity: 0.5 }]}
+            />
+            <View style={styles.userInfo}>
+              <Text variant="titleMedium" style={[styles.userName, { color: theme.colors.onPrimary }]}>
+                {getUserName()}
+              </Text>
+              <Text variant="bodySmall" style={[styles.userRole, { color: theme.colors.onPrimary }]}>
+                {getDisplayRole()}
+              </Text>
+            </View>
+          </View>
+          <IconButton
+            icon="close"
+            iconColor={theme.colors.onPrimary}
+            size={24}
+            onPress={() => {
+              if (!loading && onClose) {
+                onClose();
+              }
+            }}
+            style={styles.closeButton}
+            disabled={loading}
+          />
+        </View>
+
+        <View style={styles.content}>
+          {filteredMenuItems.map((item) => (
+            <Drawer.Item
+              key={item.key}
+              icon={item.icon}
+              label={item.title}
+              active={isRouteActive(item.route)}
+              onPress={() => handleNavigation(item.route)}
+              style={[
+                styles.menuItem,
+                isRouteActive(item.route) && styles.activeMenuItem,
+              ]}
+              theme={{
+                colors: {
+                  ...theme.colors,
+                  onSurfaceVariant: '#000000',
+                  onSurface: '#000000',
+                  primary: '#000000',
+                },
+              }}
+              disabled={loading}
+            />
+          ))}
+        </View>
+
+        <Animated.View style={[styles.logoutContainer, { transform: [{ scale: scaleAnim }] }]}>
+          <Pressable
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            onPress={handleLogout}
+            style={({ pressed }) => [
+              styles.logoutGradient,
+              { opacity: pressed || loading ? 0.7 : 1 },
+            ]}
+            disabled={loading}
+          >
+            <LinearGradient
+              colors={['#FF6B6B', '#FF4949']}
+              style={styles.logout}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+            >
+              <MaterialCommunityIcons name="logout" size={20} color="#ffffff" />
+              <Text style={styles.logoutText}>Logout</Text>
+            </LinearGradient>
+          </Pressable>
+        </Animated.View>
+      </SafeAreaView>
+    </BlurView>
+  );
+
+  return (
+    <Portal>
+      <Pressable 
+        style={[styles.backdrop, { display: visible ? 'flex' : 'none' }]} 
+        onPress={() => {
+          if (!loading && onClose) {
+            onClose();
+          }
+        }}
+      >
+        <Animated.View style={[styles.backdrop, { opacity }]} />
+      </Pressable>
+      <Animated.View
+        style={[
+          styles.menuContainer,
+          { transform: [{ translateX }] },
+        ]}
+      >
+        {menuContent}
+      </Animated.View>
+    </Portal>
+  );
+};
+
+const styles = StyleSheet.create({
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  menuContainer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: MENU_WIDTH,
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  drawer: {
+    width: MENU_WIDTH,
+    height: '100%',
+    backgroundColor: '#ffffff',
+    borderTopRightRadius: responsiveSpacing(16),
+    borderBottomRightRadius: responsiveSpacing(16),
+    overflow: 'hidden',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  header: {
+    padding: responsiveSpacing(16),
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+  },
+  headerContent: {
+    flex: 1,
+  },
+  closeButton: {
+    margin: responsiveSpacing(-6),
+    marginTop: responsiveSpacing(-3),
+  },
+  avatar: {
+    marginBottom: responsiveSpacing(12),
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  userInfo: {
+    gap: responsiveSpacing(2),
+  },
+  userName: {
+    fontWeight: '600',
+    fontSize: responsiveFontSize(16),
+  },
+  userRole: {
+    opacity: 0.9,
+    fontSize: responsiveFontSize(14),
+  },
+  content: {
+    flex: 1,
+    paddingTop: responsiveSpacing(6),
+  },
+  menuItem: {
+    borderRadius: responsiveSpacing(8),
+    marginHorizontal: responsiveSpacing(6),
+    marginVertical: responsiveSpacing(1),
+    height: responsiveSpacing(44),
+    color: 'red',
+  },
+  activeMenuItem: {
+    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  logoutContainer: {
+    paddingHorizontal: responsiveSpacing(6),
+    marginTop: 'auto',
+    marginBottom: responsiveSpacing(12),
+  },
+  logoutGradient: {
+    borderRadius: responsiveSpacing(8),
+    overflow: 'hidden',
+  },
+  logout: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: responsiveSpacing(10),
+    gap: responsiveSpacing(6),
+  },
+  logoutText: {
+    color: '#ffffff',
+    fontSize: responsiveFontSize(14),
+    fontWeight: '600',
+  },
+}); 

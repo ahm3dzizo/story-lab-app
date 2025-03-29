@@ -1,0 +1,88 @@
+{
+  "cli": {
+    "version": ">= 5.9.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": ":app:assembleDebug",
+        "buildType": "apk"
+      },
+      "ios": {
+        "buildConfiguration": "Debug"
+      },
+      "env": {
+        "ENVIRONMENT": "development"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "channel": "preview",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease",
+        "withoutCredentials": true
+      },
+      "env": {
+        "ENVIRONMENT": "staging"
+      },
+      "cache": {
+        "key": "storlab-v1"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "channel": "production",
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "ENVIRONMENT": "production"
+      }
+    },
+    "local-apk": {
+      "distribution": "internal",
+      "channel": "preview",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease",
+        "withoutCredentials": true
+      },
+      "env": {
+        "ENVIRONMENT": "staging"
+      },
+      "cache": {
+        "key": "storlab-local-v1"
+      }
+    },
+    "fixed-apk": {
+      "distribution": "internal",
+      "channel": "preview",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease",
+        "withoutCredentials": true
+      },
+      "cache": {
+        "key": "storlab-fixed-v1"
+      },
+      "env": {
+        "ENVIRONMENT": "production"
+      }
+    },
+    "basic-apk": {
+      "distribution": "internal",
+      "channel": "preview",
+      "android": {
+        "buildType": "apk",
+        "withoutCredentials": true
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

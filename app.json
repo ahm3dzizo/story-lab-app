@@ -1,0 +1,84 @@
+{
+  "expo": {
+    "name": "Story Lab",
+    "slug": "story-lab",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.storylab.app",
+      "buildNumber": "1.0.0"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "package": "com.storylab.app",
+      "versionCode": 1,
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
+        "ACCESS_NETWORK_STATE",
+        "CHANGE_NETWORK_STATE",
+        "MODIFY_AUDIO_SETTINGS",
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK"
+      ],
+      "softwareKeyboardLayoutMode": "pan",
+      "allowBackup": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to let you share them with your contacts.",
+          "cameraPermission": "The app needs access to your camera to let you take photos."
+        }
+      ],
+      [
+        "expo-document-picker",
+        {
+          "iCloudContainerEnvironment": "Production"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "The app needs access to your photos to save images and videos.",
+          "savePhotosPermission": "The app needs access to save photos and videos to your library.",
+          "isAccessMediaLocationEnabled": true
+        }
+      ]
+    ],
+    "updates": {
+      "url": "https://u.expo.dev/a3045bc8-ebd2-4651-85ad-ed4d59c34fb1"
+    },
+    "runtimeVersion": "1.0.0",
+    "scheme": "storylab",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "a3045bc8-ebd2-4651-85ad-ed4d59c34fb1"
+      }
+    }
+  }
+} 

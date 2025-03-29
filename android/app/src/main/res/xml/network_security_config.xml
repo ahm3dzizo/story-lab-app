@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">zafiiboppuqoihzlncii.supabase.co</domain>
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+    </domain-config>
+    <!-- إضافة تكوين مخصص لـ supabase -->
+    <domain-config>
+        <domain includeSubdomains="true">zafiiboppuqoihzlncii.supabase.co</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+        <pin-set expiration="2026-01-01">
+            <!-- أترك هذا فارغاً للسماح بجميع الشهادات -->
+        </pin-set>
+    </domain-config>
+</network-security-config> 
